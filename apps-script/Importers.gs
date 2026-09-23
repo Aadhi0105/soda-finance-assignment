@@ -137,11 +137,59 @@ function findLatestMatchingFile_(files, pattern, label) {
 }
 
 
+// Execution-scoped source workbook cache. It is deliberately disabled by
+// default so individual adapter refreshes behave exactly as before. The unified
+// monthly refresh enables it explicitly and clears it in a finally block.
+let SOURCE_MATRIX_CACHE_ = null;
+let SOURCE_MATRIX_CACHE_STATS_ = null;
+
+
+function beginSourceMatrixCache_() {
+  SOURCE_MATRIX_CACHE_ = {};
+  SOURCE_MATRIX_CACHE_STATS_ = {
+    conversions: 0,
+    hits: 0
+  };
+}
+
+
+function endSourceMatrixCache_() {
+  const stats = getSourceMatrixCacheStats_();
+  SOURCE_MATRIX_CACHE_ = null;
+  SOURCE_MATRIX_CACHE_STATS_ = null;
+  return stats;
+}
+
+
+function getSourceMatrixCacheStats_() {
+  if (!SOURCE_MATRIX_CACHE_STATS_) {
+    return { conversions: 0, hits: 0 };
+  }
+
+  return {
+    conversions: SOURCE_MATRIX_CACHE_STATS_.conversions,
+    hits: SOURCE_MATRIX_CACHE_STATS_.hits
+  };
+}
+
+
 /**
  * Converts XLSX temporarily to a native Google Sheet, reads it, then trashes
- * the temporary conversion.
+ * the temporary conversion. During the unified monthly refresh the in-memory
+ * matrix result is cached by source Drive file ID, so shared workbooks are
+ * converted only once per execution.
  */
 function readExcelAsMatrix_(file) {
+  const sourceFileId = file.getId();
+
+  if (
+    SOURCE_MATRIX_CACHE_ &&
+    Object.prototype.hasOwnProperty.call(SOURCE_MATRIX_CACHE_, sourceFileId)
+  ) {
+    SOURCE_MATRIX_CACHE_STATS_.hits += 1;
+    return SOURCE_MATRIX_CACHE_[sourceFileId];
+  }
+
   if (typeof Drive === 'undefined' || !Drive.Files || !Drive.Files.create) {
     throw new Error(
       'Advanced Drive service is not enabled. In Apps Script, add the Drive API service ' +
@@ -172,11 +220,17 @@ function readExcelAsMatrix_(file) {
     };
 
     sheets.forEach(sheet => {
+      const dataRange = sheet.getDataRange();
       result.sheets[sheet.getName()] = {
-        values: sheet.getDataRange().getValues(),
-        displayValues: sheet.getDataRange().getDisplayValues()
+        values: dataRange.getValues(),
+        displayValues: dataRange.getDisplayValues()
       };
     });
+
+    if (SOURCE_MATRIX_CACHE_) {
+      SOURCE_MATRIX_CACHE_[sourceFileId] = result;
+      SOURCE_MATRIX_CACHE_STATS_.conversions += 1;
+    }
 
     return result;
   } finally {

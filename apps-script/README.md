@@ -38,10 +38,11 @@ Save all files and reload the Google Sheet.
 
 The `Soda Finance` menu should show:
 
+- `Refresh monthly data`
 - `Validate setup`
-- `Refresh Exact Online data`
-- `Refresh QuickBooks data`
-- `Refresh NannyML / Adsolut data`
+- `Apply workbook protections`
+
+The three source-specific refresh functions remain available in Apps Script for diagnostics, but the normal monthly workflow uses **one menu action only**: `Refresh monthly data`.
 
 ## Adsolut source files
 
@@ -214,3 +215,27 @@ apps-script/
 ```
 
 Do not commit the source `.xlsx` files.
+
+
+## Final monthly workflow
+
+1. Upload the latest untouched source exports to the private source folder.
+2. In the workbook choose `Soda Finance -> Refresh monthly data`.
+3. The script refreshes Exact Online, QuickBooks and Adsolut in sequence.
+4. Record-ID idempotency prevents previously imported rows from being appended again.
+5. `Components` and `Dashboard` update automatically because they are formula-driven from `Data`.
+6. Workbook protections are re-applied after every refresh so newly populated `Data` rows become locked and only the remaining blank append area stays editable.
+
+No drag, fill-right, chart repointing or manual formula extension is required.
+
+## Workbook protections
+
+`Apply workbook protections` enforces the intended operating model:
+
+- `Data`: all populated rows protected; future blank append rows remain editable.
+- `Definitions`: protected.
+- `Components`: protected.
+- `Dashboard`: protected except the selected-month input `D3:F3`.
+- protection editors are restricted to the effective script user; ordinary workbook collaborators can use only the intended editable ranges.
+
+The same protection refresh also runs automatically after `Refresh monthly data`.
