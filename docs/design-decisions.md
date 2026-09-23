@@ -127,6 +127,125 @@ Expected control layers:
 
 ---
 
+## D009 — Normalized accounting signs preserve debit and credit direction
+
+The normalized Data layer uses:
+
+`Signed_Local = Debit_Local - Credit_Local`
+
+Debit values are therefore positive and credit values negative.
+
+Reason:
+
+Preserving accounting signs makes journal and trial-balance reconciliation more transparent. Management-reporting presentation signs can be reversed later in Components without altering the underlying normalized ledger.
+
+---
+
+## D010 — Source row numbers are provenance, not permanent identity
+
+`Source_Row` will be retained for traceability and debugging but will not form the primary basis of record identity.
+
+Reason:
+
+Several accounting exports may be cumulative, and row positions can change when subsequent-month data is added. Using row numbers as permanent identifiers would make the same accounting transaction appear new merely because its position changed.
+
+---
+
+## D011 — Idempotency uses deterministic fingerprints and duplicate occurrences
+
+Each normalized row will receive a deterministic `Record_Fingerprint` derived from stable economic/source fields.
+
+Where identical fingerprints occur, a `Duplicate_Occurrence` number will distinguish each occurrence, and `Record_ID` will be derived from both.
+
+Reason:
+
+The monthly import must be safe to rerun while still preserving genuine duplicate source records for investigation.
+
+---
+
+## D012 — Source duplicates remain visible
+
+The ingestion process will not silently remove identical source rows.
+
+Duplicate records will remain in Data and will be identified through:
+
+- `Is_Duplicate`
+- `Validation_Status`
+- `Issue_Codes`
+- `Include_In_Metrics`
+
+Reason:
+
+An identical source row may represent a real bookkeeping or export problem. Automatically deleting it would improve the output cosmetically while destroying evidence of the underlying issue.
+
+---
+
+## D013 — Source-specific adapters feed one common normalized schema
+
+Exact Online, QuickBooks Online, Adsolut P&L and Adsolut trial-balance inputs will each have source-specific normalization logic.
+
+All adapters must output the same normalized Data schema before mapping, classification and metric logic are applied.
+
+Reason:
+
+Accounting-system formatting differences belong in the ingestion layer. Downstream financial calculations should operate independently of the originating accounting system.
+
+---
+
+## D014 — Trial-balance-derived movements are explicitly identified
+
+Where transaction-level balance-sheet movements are unavailable, monthly movement may be derived from successive trial-balance snapshots.
+
+Such records will use:
+
+`Record_Type = TB_DERIVED_MOVEMENT`
+
+Reason:
+
+Derived movements are valid inputs for specific calculations but are not original journal lines. Explicit labelling preserves the distinction and prevents the audit trail from overstating the granularity of the source data.
+
+---
+
+## D015 — Validation status and metric eligibility are separate controls
+
+Normalized rows will contain both:
+
+- `Validation_Status`
+- `Include_In_Metrics`
+
+Validation status will use:
+
+- `PASS`
+- `WARNING`
+- `FAIL`
+
+Reason:
+
+A warning does not necessarily make a financial record unusable. Separating data-quality status from calculation eligibility allows documented overrides to remain visible without forcing every non-standard record out of the metrics.
+
+---
+
+## D016 — FX methodology is explicit at row level
+
+Normalized rows will record:
+
+- `Local_Currency`
+- `FX_Rate`
+- `FX_Rate_Type`
+- `Amount_EUR`
+
+`FX_Rate_Type` will distinguish:
+
+- `NONE`
+- `AVERAGE`
+- `CLOSING`
+
+Reason:
+
+FX translation should be inspectable rather than embedded inside opaque formulas. Flow items and month-end balance-sheet positions may require different rates, so the applied methodology must remain visible in the normalized dataset.
+
+---
+
 # Finance Decisions
 
 ## F001 — Gross Margin %
