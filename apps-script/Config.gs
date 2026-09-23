@@ -1,9 +1,6 @@
 /**
  * Track B — Soda Data SaaS Metrics
  * Configuration and normalized Data contract.
- *
- * Source folder created for this assignment:
- * https://drive.google.com/drive/folders/18WMrbaWxNdIT6-ZQL14YtjdTu5qoodOR
  */
 
 const CONFIG = Object.freeze({
@@ -20,7 +17,12 @@ const CONFIG = Object.freeze({
     EXACT_OPENING: /^Soda_Data_NV - Opening balance sheet - .* \(Exact Online\)\.xlsx$/i,
     EXACT_BS: /^Soda_Data_NV - Transactions FY27 balance sheet accounts - to .* \(Exact Online\)\.xlsx$/i,
     EXACT_PL: /^Soda_Data_NV - Transactions FY27 PL accounts - to .* \(Exact Online\)\.xlsx$/i,
-    GROUP_MAPPING: /^Soda_Group - Mapping\.xlsx$/i
+    QUICKBOOKS_GL: /^Soda_Data_Inc - General ledger - .* \(QuickBooks\)\.xlsx$/i,
+    QUICKBOOKS_TB: /^Soda_Data_Inc - Trial balance - .* \(QuickBooks\)\.xlsx$/i,
+    ADSOLUT_PL: /^NannyML_NV - PL transactions by cost centre - .* \(Adsolut\)\.xlsx$/i,
+    ADSOLUT_TB: /^NannyML_NV - Trial balance - .* \(Adsolut\)\.xlsx$/i,
+    GROUP_MAPPING: /^Soda_Group - Mapping\.xlsx$/i,
+    GROUP_STRUCTURE: /^Soda_Group - Structure IC and FX\.xlsx$/i
   }),
 
   CLOUD_SUPPLIERS: Object.freeze([
@@ -31,28 +33,44 @@ const CONFIG = Object.freeze({
   EXTERNAL_REVENUE_ACCOUNTS: Object.freeze(['704000', '704001', '704002']),
   RECURRING_REVENUE_ACCOUNTS: Object.freeze(['704000', '704001']),
 
-  // Accounts that are structurally intercompany for Soda Data NV.
-  IC_ACCOUNT_CODES: Object.freeze([
-    '280010',
-    '280020',
-    '281001',
-    '281002',
-    '416091',
-    '489093',
-    '700200'
-  ]),
-
-  IC_DEFAULT_COUNTERPARTY: Object.freeze({
-    '280010': 'SODA_DATA_INC',
-    '281001': 'SODA_DATA_INC',
-    '281002': 'SODA_DATA_INC',
-    '280020': 'NANNYML_NV',
-    '489093': 'NANNYML_NV'
+  ENTITY: Object.freeze({
+    SODA_DATA_NV: 'SODA_DATA_NV',
+    SODA_DATA_INC: 'SODA_DATA_INC',
+    NANNYML_NV: 'NANNYML_NV'
   }),
 
-  SOURCE_SYSTEM: 'EXACT',
-  ENTITY: 'SODA_DATA_NV',
-  LOCAL_CURRENCY: 'EUR'
+  SOURCE_SYSTEM: Object.freeze({
+    EXACT: 'EXACT',
+    QUICKBOOKS: 'QUICKBOOKS',
+    ADSOLUT: 'ADSOLUT'
+  }),
+
+  LOCAL_CURRENCY: Object.freeze({
+    SODA_DATA_NV: 'EUR',
+    SODA_DATA_INC: 'USD',
+    NANNYML_NV: 'EUR'
+  }),
+
+  // Structural intercompany balance accounts by entity.
+  IC_STRUCTURAL_COUNTERPARTY: Object.freeze({
+    SODA_DATA_NV: Object.freeze({
+      '280010': 'SODA_DATA_INC',
+      '281001': 'SODA_DATA_INC',
+      '281002': 'SODA_DATA_INC',
+      '416091': '',
+      '280020': 'NANNYML_NV',
+      '489093': 'NANNYML_NV',
+      '700200': ''
+    }),
+    SODA_DATA_INC: Object.freeze({
+      '429010': 'SODA_DATA_NV',
+      '429011': 'SODA_DATA_NV',
+      '489092': 'SODA_DATA_NV'
+    }),
+    NANNYML_NV: Object.freeze({
+      '416091': 'SODA_DATA_NV'
+    })
+  })
 });
 
 
@@ -142,9 +160,6 @@ const EXACT_TRANSACTION_HEADERS = Object.freeze([
 ]);
 
 
-/**
- * Zero-based positions in the validated Exact transaction export.
- */
 const EXACT_COL = Object.freeze({
   NO: 0,
   PERIOD: 1,
@@ -172,3 +187,102 @@ const EXACT_COL = Object.freeze({
   EXTRA_AMOUNT_2: 23,
   VAT_NUMBER: 24
 });
+
+
+const QUICKBOOKS_GL_HEADERS = Object.freeze([
+  'Account',
+  'Account name',
+  'Transaction date',
+  'Transaction type',
+  'Num',
+  'Name',
+  'Class',
+  'Description',
+  'Debit',
+  'Credit'
+]);
+
+
+const QUICKBOOKS_GL_COL = Object.freeze({
+  ACCOUNT_CODE: 0,
+  ACCOUNT_NAME: 1,
+  DATE: 2,
+  TRANSACTION_TYPE: 3,
+  NUM: 4,
+  COUNTERPARTY: 5,
+  CLASS: 6,
+  DESCRIPTION: 7,
+  DEBIT: 8,
+  CREDIT: 9
+});
+
+
+const QUICKBOOKS_TB_HEADERS = Object.freeze([
+  'Account Name',
+  'Debit',
+  'Credit'
+]);
+
+const ADSOLUT_PL_HEADERS = Object.freeze([
+  'Number',
+  'Period',
+  'Date',
+  'Invoice number',
+  'Journal',
+  'Description',
+  'Supplier',
+  'Debit',
+  'Credit',
+  'Cost centre',
+  'Cost unit',
+  'GL account',
+  'GL account name',
+  'Amount',
+  'Currency',
+  'Amount EUR'
+]);
+
+
+const ADSOLUT_PL_COL = Object.freeze({
+  NUMBER: 0,
+  PERIOD: 1,
+  DATE: 2,
+  INVOICE_NUMBER: 3,
+  JOURNAL: 4,
+  DESCRIPTION: 5,
+  SUPPLIER: 6,
+  DEBIT: 7,
+  CREDIT: 8,
+  COST_CENTRE: 9,
+  COST_UNIT: 10,
+  GL_CODE: 11,
+  GL_NAME: 12,
+  AMOUNT: 13,
+  CURRENCY: 14,
+  AMOUNT_EUR: 15
+});
+
+
+const ADSOLUT_TB_COL = Object.freeze({
+  ACCOUNT_CODE: 2,
+  ACCOUNT_NAME: 6,
+  BALANCE: 8
+});
+
+
+const DOCUMENTED_MAPPING_OVERRIDES = Object.freeze({
+  'NANNYML_NV|749020': Object.freeze({
+    Reporting_L1: '',
+    Reporting_L2: '',
+    Reporting_L3: '',
+    Reporting_L4: '',
+    Mapping_Cost_Centre: '',
+    Account_Type: '',
+    BS_PL: 'PL',
+    Normal_Balance: 'Credit',
+    Mapping_Classification: '',
+    Mapping_Source: 'IC_STRUCTURE_OVERRIDE',
+    Issue_Code: 'ACCOUNT_NOT_IN_GROUP_MAPPING'
+  })
+});
+

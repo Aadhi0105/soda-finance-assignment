@@ -1,124 +1,202 @@
-# Phase B — Exact Online Apps Script
+# Phase B — Exact Online + QuickBooks + Adsolut Apps Script
 
-This folder contains the first working ingestion layer for Track B.
+This folder contains the working ingestion layer for all three Track B accounting sources.
 
-It implements:
+The pipeline now implements:
 
-`Exact Online source files -> normalization -> group mapping -> validation -> idempotent append to Data`
+`Source files -> schema validation -> normalization -> mapping -> validation -> idempotent append to Data`
 
-## Source folder
+Supported source systems:
 
-A private Google Drive source folder has already been created:
+- Soda Data NV — Exact Online
+- Soda Data Inc — QuickBooks Online
+- NannyML NV — Adsolut
 
-https://drive.google.com/drive/folders/18WMrbaWxNdIT6-ZQL14YtjdTu5qoodOR
-
-Upload the original candidate `.xlsx` files to that folder unchanged.
-
-For the current Exact phase, the script requires at least:
-
-- `Soda_Data_NV - Opening balance sheet - 31-03-2026 (Exact Online).xlsx`
-- `Soda_Data_NV - Transactions FY27 balance sheet accounts - to 30-06-2026 (Exact Online).xlsx`
-- `Soda_Data_NV - Transactions FY27 PL accounts - to 30-06-2026 (Exact Online).xlsx`
-- `Soda_Group - Mapping.xlsx`
-
-Uploading all 12 candidate spreadsheets now is fine and will save time for the later QuickBooks and Adsolut phases.
-
-Do not rename or edit the raw source files.
-
-## Install into the Google Sheet
-
-Open:
+## Google Sheet
 
 https://docs.google.com/spreadsheets/d/1mmunZBcnGFvsTOqdCsKb7n7-GpUwE1qmdanJMK8n9zM/edit
 
-Then:
+## Private source folder
 
-1. `Extensions -> Apps Script`
-2. Keep the project bound to this workbook.
-3. Create these script files:
-   - `Code.gs`
-   - `Config.gs`
-   - `Importers.gs`
-   - `Normalize.gs`
-   - `Validation.gs`
-4. Paste the contents of the matching local files into each Apps Script file.
-5. In Apps Script Project Settings, enable `Show "appsscript.json" manifest file in editor`.
-6. Replace the manifest with the supplied `appsscript.json`.
-7. Save all files.
-8. Reload the Google Sheet.
+https://drive.google.com/drive/folders/18WMrbaWxNdIT6-ZQL14YtjdTu5qoodOR
 
-A new menu should appear:
+Keep the original candidate `.xlsx` files in that folder unchanged.
 
-`Soda Finance`
+## Install / replace in Apps Script
 
-with:
+Replace the complete contents of the matching files in the bound Apps Script project:
+
+- `Code.gs`
+- `Config.gs`
+- `Importers.gs`
+- `Normalize.gs`
+- `Validation.gs`
+
+The existing `appsscript.json` remains compatible and should keep the Drive v3 advanced service enabled.
+
+Save all files and reload the Google Sheet.
+
+The `Soda Finance` menu should show:
 
 - `Validate setup`
 - `Refresh Exact Online data`
+- `Refresh QuickBooks data`
+- `Refresh NannyML / Adsolut data`
 
-## First test
+## Adsolut source files
 
-Run:
+The NannyML adapter uses:
 
-`Soda Finance -> Validate setup`
+- `NannyML_NV - PL transactions by cost centre - Apr-Jun 2026 (Adsolut).xlsx`
+- `NannyML_NV - Trial balance - 31-03-2026 (Adsolut).xlsx`
+- `NannyML_NV - Trial balance - 30-04-2026 (Adsolut).xlsx`
+- `NannyML_NV - Trial balance - 31-05-2026 (Adsolut).xlsx`
+- `NannyML_NV - Trial balance - 30-06-2026 (Adsolut).xlsx`
+- `Soda_Group - Mapping.xlsx`
+- `Soda_Group - Structure IC and FX.xlsx`
 
-The first run will ask for Google authorization.
+The script keeps the latest Drive file for each distinct Adsolut TB snapshot date if duplicate uploads exist.
 
-If setup is valid, run:
+## Adsolut normalized population
 
-`Soda Finance -> Refresh Exact Online data`
+With the supplied source pack, the expected population is:
 
-The script will:
+- 20 `OPENING_BALANCE` rows from the 31-Mar-2026 TB;
+- 60 `TB_DERIVED_MOVEMENT` rows: 20 B/S accounts for Apr, May and Jun;
+- 93 P&L `JOURNAL_LINE` rows.
 
-1. locate the latest matching Exact files in the private Drive folder;
-2. temporarily convert each `.xlsx` to a native Google Sheet;
-3. read the source data;
-4. trash the temporary conversions;
-5. normalize all Exact rows into the 53-column Data schema;
-6. apply the supplied group mapping;
-7. run row-level and batch controls;
-8. create stable SHA-256 record identities;
-9. append only Record_IDs not already present.
+Expected total:
 
-## Important controls implemented
+`173 normalized rows`
 
-- exact 25-column Exact transaction schema validation;
-- opening-balance row selection by six-digit GL code;
-- `Debit - Credit = source base Amount`;
-- FY27 Period-to-Date consistency;
-- source cutoff vs transaction date;
-- full group mapping;
-- group mapping completeness;
-- source duplicate flagging;
-- Exact opening-balance check;
-- Exact Entry No. balancing across the combined B/S and P&L files;
-- book currency vs original transaction currency separation;
-- prevention of double FX conversion for Soda Data NV;
-- idempotent reruns.
+The TB-derived movement rows are explicitly labelled because NannyML does not provide detailed B/S journal exports.
 
-## Expected behaviour with the supplied June pack
+## Adsolut controls
 
-The current source pack contains:
+The adapter implements:
 
-- 27 opening-balance GL rows;
-- 270 Exact balance-sheet transaction rows;
-- 228 Exact P&L transaction rows.
+- exact 16-column analytical P&L schema validation;
+- P&L `Debit - Credit = Amount`;
+- EUR source amount validation;
+- FY27 Period-to-Date validation;
+- source cutoff validation;
+- group mapping and documented override logic;
+- cumulative P&L transaction reconciliation to each monthly/YTD trial balance;
+- deterministic TB-derived B/S movement calculation;
+- exact duplicate detection;
+- explicit duplicate metric exclusion without deleting either source row;
+- NannyML IC consulting / management-fee / current-account checks;
+- source-system idempotency.
 
-That is 525 normalized source rows before idempotency.
+## Known Adsolut source issues expected to surface
 
-The known 31 March 2027 year-end true-up consists of three balancing journal entries represented by six normalized journal lines across the B/S and P&L exports. Those lines should remain visible in `Data`, be flagged `FUTURE_DATED`, receive `Validation_Status = FAIL`, and have `Include_In_Metrics = FALSE`.
+### 1. Exact duplicate
 
-The Exact entries themselves should balance across the combined B/S and P&L exports, and the current Exact GL codes should map successfully.
+The June Halden IT Consulting row appears twice with the same:
 
-## Rerun test
+- period;
+- date;
+- invoice number;
+- supplier;
+- GL;
+- cost centre;
+- amount.
 
-After a successful first refresh, run `Refresh Exact Online data` again with no source changes.
+Both source rows remain visible.
 
-Expected result:
+The first occurrence stays metric-eligible with a duplicate warning.
 
-`New rows appended: 0`
+The second identical occurrence receives:
 
-This is the first idempotency test.
+`DUPLICATE_SOURCE_RECORD;DUPLICATE_EXCLUDED`
+
+with `Validation_Status = FAIL` and `Include_In_Metrics = FALSE`.
+
+### 2. GL 749020 absent from central group mapping
+
+Three monthly EUR 60,000 IC consulting-income rows use GL `749020`.
+
+The IC structure explicitly identifies that NannyML account and relationship, so the adapter uses:
+
+`Mapping_Source = IC_STRUCTURE_OVERRIDE`
+
+and surfaces:
+
+`ACCOUNT_NOT_IN_GROUP_MAPPING`
+
+as a warning.
+
+The rows are classified as intercompany with `SODA_DATA_NV`, so they do not feed external revenue.
+
+### 3. Missing June management fee
+
+The IC schedule expects a EUR 23,000 monthly management fee from Soda Data NV to NannyML.
+
+NannyML books EUR 23,000 in April and May but no June management-fee P&L row.
+
+The June `416091` TB-derived movement increases by EUR 23,000 rather than remaining flat, which is consistent with the missing IC offset.
+
+The script surfaces:
+
+`IC_MISMATCH`
+
+on the June derived current-account row without inventing or plugging the missing entry.
+
+## Expected first Adsolut refresh
+
+With the supplied pack, expect approximately:
+
+```text
+Source rows normalized: 173
+New rows appended: 173
+Existing rows skipped: 0
+FAIL rows: 1
+WARNING rows: 5
+P&L/TB mismatches: 0
+IC mismatch months: 1
+Duplicate groups: 1
+Excluded duplicate rows: 1
+Future-dated rows: 0
+Unmapped rows: 0
+```
+
+The five warning-status rows are expected to consist of:
+
+- 3 × GL 749020 mapping-override rows;
+- 1 × first occurrence of the duplicate Halden transaction;
+- 1 × June 416091 IC mismatch row.
+
+The second duplicate is a FAIL because it is deliberately excluded from metrics.
+
+## Idempotency test
+
+Run `Refresh NannyML / Adsolut data` a second time without changing source files.
+
+Expected:
+
+```text
+New rows appended: 0
+Existing rows skipped: 173
+```
+
+## Existing validated adapters
+
+### Exact Online
+
+Expected current population:
+
+- 525 normalized rows;
+- 6 future-dated FAIL rows;
+- second identical refresh appends 0.
+
+### QuickBooks
+
+Expected current population:
+
+- 231 normalized rows;
+- 0 FAIL;
+- 2 WARNING rows from the June USD 3,750 IC recharge mismatch;
+- second identical refresh appends 0.
 
 ## Repository
 
@@ -135,4 +213,4 @@ apps-script/
 └── README.md
 ```
 
-Do not commit the Soda source `.xlsx` files.
+Do not commit the source `.xlsx` files.

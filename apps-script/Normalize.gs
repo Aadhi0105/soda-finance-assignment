@@ -2,8 +2,7 @@
  * Common normalized record construction, mapping and metric classification.
  */
 
-
-function buildBaseRecord_(batch, sourceFile, sourceRow) {
+function buildBaseRecord_(batch, sourceFile, sourceRow, sourceSystem, entity) {
   const record = {};
 
   DATA_HEADERS.forEach(header => {
@@ -13,9 +12,9 @@ function buildBaseRecord_(batch, sourceFile, sourceRow) {
   record.Import_Batch_ID = batch.batchId;
   record.Imported_At = batch.importedAt;
   record.Source_File = sourceFile;
-  record.Source_System = CONFIG.SOURCE_SYSTEM;
+  record.Source_System = sourceSystem;
   record.Source_Row = sourceRow;
-  record.Entity = CONFIG.ENTITY;
+  record.Entity = entity;
 
   record.Is_Intercompany = false;
   record.Is_External_Revenue = false;
@@ -36,11 +35,8 @@ function buildBaseRecord_(batch, sourceFile, sourceRow) {
 }
 
 
-/**
- * Adds the supplied group mapping to one normalized record.
- */
 function applyMapping_(record, mapping) {
-  const map = mapping[record.Account_Code];
+  const map = getMappingEntry_(record.Account_Code, mapping, record.Entity);
 
   if (!map) {
     record.Is_Unmapped = true;
@@ -54,39 +50,52 @@ function applyMapping_(record, mapping) {
   record.Reporting_L3 = map.Reporting_L3;
   record.Reporting_L4 = map.Reporting_L4;
 
-  // Preserve transaction-level operational detail where supplied.
+  // Preserve transaction-level operational detail where available.
   record.Mapped_Cost_Centre = cleanText_(record.Source_Cost_Centre);
 
   record.BS_PL = map.BS_PL;
   record.Account_Type = map.Account_Type;
   record.Normal_Balance = map.Normal_Balance;
   record.Mapping_Classification = map.Mapping_Classification;
-  record.Mapping_Source = 'GROUP_MAPPING';
+  record.Mapping_Source = map.Mapping_Source || 'GROUP_MAPPING';
+
+  if (map.Issue_Code) {
+    addIssue_(record, map.Issue_Code, 'WARNING');
+  }
 }
 
 
-/**
- * Applies deterministic classifications used later by Components formulas.
- */
+function getMappingEntry_(accountCode, mapping, entity) {
+  if (mapping[accountCode]) {
+    return Object.assign({
+      Mapping_Source: 'GROUP_MAPPING',
+      Issue_Code: ''
+    }, mapping[accountCode]);
+  }
+
+  const key = entity + '|' + accountCode;
+  const override = DOCUMENTED_MAPPING_OVERRIDES[key];
+
+  if (override) {
+    return Object.assign({
+      Code: accountCode,
+      Description: ''
+    }, override);
+  }
+
+  return null;
+}
+
+
 function applyMetricClassification_(record) {
   const code = record.Account_Code;
   const counterparty = normalizeGroupCounterparty_(record.Counterparty);
+  const structuralCounterparty = getStructuralIcCounterparty_(record.Entity, code);
 
-  let isIC = false;
-
-  if (counterparty) {
-    isIC = true;
-  }
-
-  if (CONFIG.IC_ACCOUNT_CODES.indexOf(code) >= 0) {
-    isIC = true;
-  }
+  const isIC = Boolean(counterparty || structuralCounterparty !== null);
 
   record.Is_Intercompany = isIC;
-  record.IC_Counterparty =
-    counterparty ||
-    CONFIG.IC_DEFAULT_COUNTERPARTY[code] ||
-    '';
+  record.IC_Counterparty = counterparty || structuralCounterparty || '';
 
   record.Is_External_Revenue =
     CONFIG.EXTERNAL_REVENUE_ACCOUNTS.indexOf(code) >= 0 &&
@@ -121,10 +130,6 @@ function applyMetricClassification_(record) {
 }
 
 
-/**
- * Creates stable fingerprints independent of source row or monthly cumulative
- * export filename, then assigns duplicate occurrences within the current batch.
- */
 function assignFingerprintsAndDuplicateFlags_(records) {
   const grouped = {};
 
@@ -173,29 +178,40 @@ function assignFingerprintsAndDuplicateFlags_(records) {
 }
 
 
-/**
- * Identifies a group counterparty from source text.
- */
 function normalizeGroupCounterparty_(counterparty) {
   const value = cleanText_(counterparty).toLowerCase();
 
   if (!value) return '';
 
   if (value.indexOf('soda data inc') >= 0) {
-    return 'SODA_DATA_INC';
+    return CONFIG.ENTITY.SODA_DATA_INC;
+  }
+
+  if (value.indexOf('soda data nv') >= 0) {
+    return CONFIG.ENTITY.SODA_DATA_NV;
   }
 
   if (value.indexOf('nannyml') >= 0) {
-    return 'NANNYML_NV';
+    return CONFIG.ENTITY.NANNYML_NV;
   }
 
   return '';
 }
 
 
-/**
- * Normalizes the mapping's B/S / Profit & Loss values.
- */
+function getStructuralIcCounterparty_(entity, accountCode) {
+  const byEntity = CONFIG.IC_STRUCTURAL_COUNTERPARTY[entity];
+
+  if (!byEntity) return null;
+
+  if (Object.prototype.hasOwnProperty.call(byEntity, accountCode)) {
+    return byEntity[accountCode];
+  }
+
+  return null;
+}
+
+
 function normalizeBsPl_(value) {
   const text = cleanText_(value).toLowerCase();
 
