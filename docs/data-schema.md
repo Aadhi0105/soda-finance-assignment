@@ -380,6 +380,43 @@ Any unexpected currency must produce a validation flag.
 
 ---
 
+### `Transaction_Currency`
+
+Original transaction currency supplied by the accounting source.
+
+Examples:
+
+- `EUR`
+- `USD`
+
+For Soda Data NV Exact rows, `Local_Currency` remains `EUR` because the books are maintained in EUR, while `Transaction_Currency` may be `USD` for foreign-currency transactions.
+
+This field preserves the original denomination without changing the book-currency amount.
+
+---
+
+### `Transaction_Amount`
+
+Signed amount in the original transaction currency.
+
+For Exact Online rows, this corresponds to the source transaction-currency amount where supplied.
+
+Example:
+
+```text
+Local_Currency       = EUR
+Signed_Local         = 25000
+Transaction_Currency = USD
+Transaction_Amount   = 28750
+```
+
+This field is used for auditability and intercompany reconciliation.
+
+It must not replace the EUR book value used in `Signed_Local` and `Amount_EUR`.
+
+
+---
+
 # 6. Mapping and FX Fields
 
 ### `Reporting_L1`
@@ -399,6 +436,14 @@ Second reporting layer supplied by the Soda group mapping.
 Third reporting layer where available.
 
 Blank if the mapping does not provide a third layer.
+
+---
+
+### `Reporting_L4`
+
+Fourth reporting layer supplied by the Soda group mapping where available.
+
+Blank when the mapping does not provide a fourth reporting layer.
 
 ---
 
@@ -435,6 +480,31 @@ Examples may include:
 - Other classifications present in the supplied mapping.
 
 Source mapping terminology should be preserved.
+
+---
+
+### `Normal_Balance`
+
+Expected debit/credit orientation supplied by the Soda group mapping.
+
+Examples may include:
+
+- `Debit`
+- `Credit`
+
+Used as a mapping and validation attribute.
+
+It does not replace the normalized accounting sign convention.
+
+---
+
+### `Mapping_Classification`
+
+Classification field supplied by the Soda group mapping.
+
+Source mapping terminology should be preserved.
+
+Used for reporting, auditability and future metric extensions.
 
 ---
 
